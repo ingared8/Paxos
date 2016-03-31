@@ -7,14 +7,15 @@ public class Message {
 
     // please feel free to add new types of messages
     public enum MSG_TYPE {
-	    PREPARE,PROMISE,ACCEPT,ACCEPTED
+	    PREPARE,PROMISE,ACCEPT,ACCEPTED,REQUEST
     }
-	
+
 	private int type;
 	private NodeIdentifier sender;
-	
+	private int value;
+
 	protected Message(){}
-	
+
 	public Message(MSG_TYPE msgType, NodeIdentifier sender){
 		this.type = msgType.ordinal();
 		this.sender = sender;
@@ -23,6 +24,14 @@ public class Message {
     public int getType() {
         return type;
     }
+
+	public int getValue(){
+		return value;
+	}
+
+	public void setValue(int x){
+		value = x;
+	}
 
 	public void setType(int t) {
 		type = t;
@@ -72,6 +81,9 @@ public class Message {
 				break;
 			case ACCEPTED:
 				ret = new Accepted();
+				break;
+			case REQUEST:
+				ret = new Request();
 				break;
 			default:
 				throw new RuntimeException("Unknown msg type "+type);

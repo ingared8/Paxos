@@ -308,9 +308,8 @@ public class NettyNetwork extends Network {
 	    }
 	}
 	
-	private static class TimerEvent {
-	
-	}
+	private static class TimerEvent {}
+
 	private class TimerInsertThread extends Thread {
 		public void run(){
 			TimerEvent te = new TimerEvent();
