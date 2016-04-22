@@ -12,7 +12,7 @@ public class Request extends  Message {
 
     public Request(NodeIdentifier sender, int value){
         this.setSender(sender.hashCode());
-        this.setType(2);
+        this.setType(Message.MSG_TYPE.REQUEST.ordinal());
         this.setValue(value);
     }
 }

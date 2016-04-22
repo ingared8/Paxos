@@ -25,19 +25,20 @@ public class Test {
 
 		Configuration.addActiveLogger("NettyNetwork", SimpleLogger.INFO);
 		Configuration.addNodeAddress(clientID, new InetSocketAddress("localhost", 2001));
-        Configuration.addNodeAddress(proposerID, new InetSocketAddress("localhost", 3001));
+        //Configuration.addNodeAddress(proposerID, new InetSocketAddress("localhost", 3001));
         Configuration.addNodeAddress(learnerID, new InetSocketAddress("localhost", 4001));
         Configuration.addNodeAddress(acceptorID, new InetSocketAddress("localhost", 5001));
+
 		//TestClient client = new TestClient(clientID);
 		//TestServer server = new TestServer(serverID);
 
         // Initializing the Various players of Protocol
+
         Client client = new Client(clientID);
-        Proposer proposer = new Proposer(proposerID);
+        //Proposer proposer = new Proposer(proposerID);
         Acceptor acceptor = new Acceptor(acceptorID);
         Learner learner = new Learner(learnerID);
-
-        client.sendRequest(new Request(clientID,200),proposerID);
+        client.sendRequest(new Request(clientID, 200), proposerID);
 
 		//client.sendValue(serverID, 200);
 		//server.sendValue(serverID, 100);
@@ -119,13 +120,13 @@ public class Test {
         }
 
         public void sendRequest(Request request, NodeIdentifier receiver) {
-            System.out.printf("Client: Sending Request ( %s )  to  %s\n", request.toString(), receiver.toString());
+            System.out.printf(myID.toString() + " : Sending Request ( %s )  to  %s\n", request.toString(), receiver.toString());
             network.sendMessage(receiver, request);
         }
 
         public void sendRequest(int value, NodeIdentifier receiver) {
             Request request = new Request(myID, value);
-            System.out.printf("Client: Sending Request ( %s )  to  %s\n", request.toString(), receiver.toString());
+            System.out.printf(myID.toString() + " : Sending Request ( %s )  to  %s\n", request.toString(), receiver.toString());
             network.sendMessage(receiver, request);
         }
 
@@ -138,9 +139,9 @@ public class Test {
         public void handleMessage(Message msg) {
 
             if (msg instanceof Response) {
-                System.out.printf("Client: Response Received from : %s => %d\n", msg.getSender().toString(), msg.getValue());
+                System.out.printf(myID.toString() +" : Response Received from : %s => %d\n", msg.getSender().toString(), msg.getValue());
             } else {
-                System.out.printf("Client: Response Received of Unknown type:  %s\n", msg.toString());
+                System.out.printf(myID.toString() + " : Response Received of Unknown type:  %s\n", msg.toString());
             }
         }
 
@@ -172,16 +173,16 @@ public class Test {
 
         private NodeIdentifier myID;
         private Network network;
-        private int proposalID;
+        private int maxProposalID;
 
         public Acceptor(NodeIdentifier node) {
             this.myID = node;
             this.network = new NettyNetwork(myID, this);
-            this.proposalID = 0;
+            this.maxProposalID = 0;
         }
 
-        public void sendPromise(NodeIdentifier receiver) {
-            Promise promiseMsg = new Promise(myID, Promise.STATUS.PROMISE);
+        public void sendPromise(NodeIdentifier receiver, int proposalId) {
+            Promise promiseMsg = new Promise(myID, Promise.STATUS.ACCEPT,proposalId);
 
             System.out.printf("Acceptor: Sending Promise (%s) to Proposer %s\n", promiseMsg, receiver);
             network.sendMessage(receiver, promiseMsg);
@@ -197,7 +198,20 @@ public class Test {
 
             if (msg instanceof Prepare) {
                 // TODO Check proposal Id of the message
-                System.out.printf("Acceptor: Proposal ( %s) Received from : %s\n", msg.getSender().toString(), msg.toString());
+                Prepare prepareMsg = (Prepare)msg;
+                int proposalId = prepareMsg.getProposalID();
+                System.out.printf("Acceptor: Proposal:%s Received from : %s\n", proposalId, msg.getSender().toString());
+                Promise promise;
+                if (proposalId < maxProposalID){
+                    // Reject
+                    promise = new Promise(myID,Promise.STATUS.REJECT,proposalId);
+                } else {
+                    // Accept
+                    promise = new Promise(myID,Promise.STATUS.ACCEPT, proposalId);
+                }
+
+                System.out.println(myID.toString() + " : " + promise.toString());
+                network.sendMessage(prepareMsg.getSender(), promise);
 
             } else {
                 System.out.printf("Response Received of Unknown type:  %s\n", msg.toString());
@@ -244,6 +258,7 @@ public class Test {
         private NodeIdentifier myID;
         private  Network network;
         private int proposalID;
+        private int quorum = 0;
 
         public Proposer(NodeIdentifier node){
             this.myID = node;
@@ -256,6 +271,10 @@ public class Test {
          */
         public void sendPrepare(NodeIdentifier receiver, Prepare prepareMsg){
             this.network.sendMessage(receiver,prepareMsg);
+        }
+
+        public void sendAccept(NodeIdentifier receiver,Accept acceptMsg) {
+            this.network.sendMessage(receiver, acceptMsg);
         }
 
     /*
@@ -271,7 +290,7 @@ public class Test {
             Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
             NodeIdentifier receiver;
             Prepare prepareMsg;
-            while ( iter.hasNext()){
+            while ( iter.hasNext()){    
                 receiver = (NodeIdentifier)iter.next();
                 prepareMsg = new Prepare(myID, proposalID);
                 prepareMsg.setValue(msg.getValue());
@@ -281,24 +300,51 @@ public class Test {
 
         } else if (msg instanceof Promise){
             System.out.printf("Proposer: Received Ack( %s) from %s\n", msg.toString(),msg.getSender() );
-
+            Promise promise = (Promise)msg;
+            quorum += promise.getstatus();
+            System.out.println("status " + promise.getstatus());
+            System.out.println(promise.toString() + " Quorum :" + quorum + " Total votes " + Configuration.numAcceptors/2);
+            if ( quorum > (Configuration.numAcceptors)/2) {
+                // Quorum reached, send accept
+                System.out.println("Quorum reached ");
+                sendAcceptMsg(promise.getProposalID());
+            } else {
+                // Quorum not reached.
+                System.out.println("Quorum not reached");
+                int zz = 0;
+            }
         } else if (msg instanceof Accepted) {
 
         } else {
-            System.out.printf("Unknown msg type received : " + msg.toString());
+            System.out.printf("Unknown msg type received : " + msg.toString() + "\n");
+            System.out.printf(msg.getSender().toString() + " " + msg.getValue() );
             //throw new RuntimeException("Unknown msg type received : " + msg.toString() );
         }
     }
+
+        private void sendAcceptMsg(int proposalID) {
+
+            Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
+            NodeIdentifier receiver;
+            Accept accept;
+            while ( iter.hasNext()){
+                receiver = (NodeIdentifier)iter.next();
+                accept = new Accept(myID,proposalID);
+                sendAccept(receiver, accept);
+            }
+            proposalID += 1;
+        }
 
     /*
 	 * Handle a timer event. A timer event is triggered if
 	 * there is no other event in a given amount of time (100ms).
 	 */
-
+        
     @Override
     public void handleTimer(){
 
     }
+
 
     /*
      * Handle a failure event. A failure event is triggered
@@ -312,7 +358,9 @@ public class Test {
             if (cause instanceof ClosedChannelException){
                 System.out.printf("%s handleFailure get %s\n", myID, cause);
             }
+
         }
+
     }
 
 }

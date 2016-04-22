@@ -18,8 +18,8 @@ public class Acceptor implements EventHandler {
         this.proposalID = 0;
     }
 
-    public void sendPromise(NodeIdentifier receiver){
-        Promise promiseMsg = new Promise(myID,Promise.STATUS.PROMISE);
+    public void sendPromise(NodeIdentifier receiver,int proposalID){
+        Promise promiseMsg = new Promise(myID,Promise.STATUS.ACCEPT, proposalID);
 
         System.out.printf("Acceptor: Sending Promise (%s) to Proposer %s\n", promiseMsg, receiver);
         network.sendMessage(receiver,promiseMsg);

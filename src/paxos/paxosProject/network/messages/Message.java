@@ -7,7 +7,7 @@ public class Message {
 
     // please feel free to add new types of messages
     public enum MSG_TYPE {
-	    PREPARE,PROMISE,ACCEPT,ACCEPTED,REQUEST
+	    PREPARE,PROMISE,ACCEPT,ACCEPTED,REQUEST,RESPOSNE
     }
 
 	private int type;
@@ -91,4 +91,5 @@ public class Message {
 		ret.deserialize(buf);
 		return ret;
 	}
+
 }

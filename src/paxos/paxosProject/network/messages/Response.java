@@ -12,7 +12,7 @@ public class Response extends Message{
 
     public Response(NodeIdentifier sender, int value){
         this.setSender(sender.hashCode());
-        this.setType(2);
+        this.setType(5);
         this.setValue(value);
     }
 }

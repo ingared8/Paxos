@@ -34,10 +34,11 @@ public class NettyNetwork extends Network {
 	private final LinkedBlockingQueue<Object> events = new LinkedBlockingQueue<Object>(1000);
 	private final static PooledByteBufAllocator allocator = new PooledByteBufAllocator();
 	private final Session[][] sessions;
+	private final String roleId;
 	
 	public NettyNetwork(NodeIdentifier myID, EventHandler eventHandler){
 		super(myID, eventHandler);
-		
+		roleId = myID.toString();
 		InetSocketAddress addr = Configuration.getNodeAddress(myID);
 		setupServer(addr);
 		new EventThread().start();
@@ -76,7 +77,7 @@ public class NettyNetwork extends Network {
              .childOption(ChannelOption.SO_KEEPALIVE, true);
 
             ChannelFuture f = b.bind(addr).sync(); // (7)
-            LOG.info("Server is bind to %s\n", addr);
+            LOG.info(roleId + " is bind to %s\n", addr);
         } catch (InterruptedException e) {
 			LOG.warning(e);
 		} finally {
@@ -87,7 +88,6 @@ public class NettyNetwork extends Network {
 	
 	EventLoopGroup workerGroup = new NioEventLoopGroup();
 	private Channel createConnection(InetSocketAddress addr, NodeIdentifier node) {
-		
 
         try {
 			final NodeIdentifier locNode = node;
@@ -104,16 +104,16 @@ public class NettyNetwork extends Network {
             });
 
             // Start the client.
-            LOG.info("Start to connect to %s\n", addr);
+            LOG.info(roleId + " Start to connect to %s\n", addr);
             b.connect(addr.getHostName(), addr.getPort());
             ChannelFuture f = b.connect(addr.getHostName(), addr.getPort()); // (5)
             boolean success = f.await(100);
             if(success && f.isSuccess()){
-            	LOG.info("Connected to %s\n", addr);
+            	LOG.info(roleId + " Connected to %s\n", addr);
             	return f.channel();
             }
             else{
-            	LOG.warning("Connect to %s failed\n", addr);
+            	LOG.warning(roleId + " Connect to %s failed\n", addr);
             	reportError(node, f.cause());
             	return null;
             }
@@ -214,24 +214,31 @@ public class NettyNetwork extends Network {
 			this.increaseOutstanding();
 
 			if (Message.MSG_TYPE.ACCEPTED.ordinal() == msg.getType()) {
+                System.out.printf("First if \n");
 				Accepted p2b = (Accepted) msg;
 				if (Configuration.testIndexA == p2b.getIndex() && myID.equals(receiver)) {  // leader
 					System.out.printf("capture L send %s\n", p2b);
 					ClosedChannelException e = new ClosedChannelException();
 					reportError(myID, e);
-					System.exit(1);
+                    System.out.printf("second if \n");
+
+                    System.exit(1);
 
 				} else if (Configuration.testIndexB == p2b.getIndex() && !myID.equals(receiver)) { // follower
 				// or if (receiver.getID()+1 == myID.getID())
 					System.out.printf("capture F send %s\n", p2b);
 					ClosedChannelException e = new ClosedChannelException();
 					reportError(myID, e);
-					System.exit(1);
+                    System.out.printf("third if \n");
+                    System.exit(1);
 				}
 			}
-			ChannelFuture f = s.channel.writeAndFlush(msg);
+            System.out.printf("Message type %s \n", msg.getClass().toString());
+            ChannelFuture f = s.channel.writeAndFlush(msg);
 			f.addListener(s.sendCompleteHandler);
 		}
+        System.out.printf("Message type %s \n", msg.getClass().toString());
+        System.out.printf(" %s sends %s to %s\n", myID, msg, receiver);
 		LOG.debug("%s sends %s to %s\n", myID, msg, receiver);
 	}
 	

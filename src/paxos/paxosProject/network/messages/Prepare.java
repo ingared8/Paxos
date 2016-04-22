@@ -14,7 +14,7 @@ public class Prepare extends Message {
         this.proposalID = proposalID;
     }
 
-    private int getProposalID(){
+    public int getProposalID(){
         return proposalID;
     }
 
