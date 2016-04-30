@@ -22,6 +22,7 @@ public class Proposer implements EventHandler {
     private NodeIdentifier myID;
     private  Network network;
     private int proposalID;
+    private int quorum = 0;
 
     public Proposer(NodeIdentifier node){
         this.myID = node;
@@ -34,6 +35,10 @@ public class Proposer implements EventHandler {
      */
     public void sendPrepare(NodeIdentifier receiver, Prepare prepareMsg){
         this.network.sendMessage(receiver,prepareMsg);
+    }
+
+    public void sendAccept(NodeIdentifier receiver,Accept acceptMsg) {
+        this.network.sendMessage(receiver, acceptMsg);
     }
 
     /*
@@ -59,12 +64,39 @@ public class Proposer implements EventHandler {
 
         } else if (msg instanceof Promise){
             System.out.printf("Proposer: Received Ack( %s) from %s\n", msg.toString(),msg.getSender() );
-
+            Promise promise = (Promise)msg;
+            quorum += promise.getstatus();
+            System.out.println("status " + promise.getstatus());
+            System.out.println(promise.toString() + " Quorum :" + quorum + " Total votes " + Configuration.numAcceptors/2);
+            if ( quorum > (Configuration.numAcceptors)/2) {
+                // Quorum reached, send accept
+                System.out.println("Quorum reached ");
+                sendAcceptMsg(promise.getProposalID());
+            } else {
+                // Quorum not reached.
+                System.out.println("Quorum not reached");
+                int zz = 0;
+            }
         } else if (msg instanceof Accepted) {
 
         } else {
-            throw new RuntimeException("Unknown msg type received : " + msg.toString() );
+            System.out.printf("Unknown msg type received : " + msg.toString() + "\n");
+            System.out.printf(msg.getSender().toString() + " " + msg.getValue() );
+            //throw new RuntimeException("Unknown msg type received : " + msg.toString() );
         }
+    }
+
+    private void sendAcceptMsg(int proposalID) {
+
+        Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
+        NodeIdentifier receiver;
+        Accept accept;
+        while ( iter.hasNext()){
+            receiver = (NodeIdentifier)iter.next();
+            accept = new Accept(myID,proposalID);
+            sendAccept(receiver, accept);
+        }
+        proposalID += 1;
     }
 
     /*
@@ -76,6 +108,7 @@ public class Proposer implements EventHandler {
     public void handleTimer(){
 
     }
+
 
     /*
      * Handle a failure event. A failure event is triggered
@@ -89,5 +122,8 @@ public class Proposer implements EventHandler {
         if (cause instanceof ClosedChannelException){
             System.out.printf("%s handleFailure get %s\n", myID, cause);
         }
+
     }
+
 }
+

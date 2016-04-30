@@ -17,9 +17,9 @@ public class Promise extends Message {
         this.setSender(sender.hashCode());
         this.setType(1);
         this.status = statusmsg.ordinal();
+
         this.proposalID = proposalId;
     }
-
 
     public int getstatus(){
         return this.status;
