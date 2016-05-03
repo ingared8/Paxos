@@ -1,29 +1,30 @@
 package paxosProject.network;
 
-import paxosProject.network.messages.Accepted;
+import paxosProject.Configuration;
+import paxosProject.network.messages.Learn;
 import paxosProject.network.messages.Message;
 import paxosProject.network.messages.Response;
 
 import java.nio.channels.ClosedChannelException;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * Created by ingared on 3/30/16.
  */
+
 public class Learner implements EventHandler {
 
     private NodeIdentifier myID;
-    private  Network network;
+    private Network network;
+    private List<Learn> learnedValues;
+    private int index;
 
     public Learner(NodeIdentifier node){
-
         this.myID = node;
         this.network = new NettyNetwork(myID, this);
-
-    }
-
-    public void sendValue(NodeIdentifier receiver, int value){
-        System.out.printf("server send %s => %s\n", new Accepted(myID, value), receiver);
-        network.sendMessage(receiver, new Accepted(myID, value));
+        learnedValues = new LinkedList<>();
+        index = -1;
     }
 
     /*
@@ -34,10 +35,16 @@ public class Learner implements EventHandler {
     @Override
     public void handleMessage(Message msg){
 
-        if (msg instanceof Response) {
-            System.out.printf("Response Received from : %s => %d\n", msg.getSender().toString(), msg.getValue());
+        if (msg instanceof Learn) {
+            Learn learn = (Learn)msg;
+            Response response = new Response(myID,learn);
+            learnedValues.add(learn.getSlot(),learn);
+            network.sendMessage(Configuration.clientIDs.get(Math.max(1,(learn.getRequestID()%Configuration.numClients))),response);
+
+        } else if (msg instanceof Response) {
+            System.out.printf("%s: Response Received from : %s => %d\n", myID.toString(), msg.getSender().toString(), msg.getValue());
         } else {
-            System.out.printf("Response Received of Unknown type:  %s\n", msg.toString());
+            System.out.printf(" %s : Response Received of Unknown type:  %s\n",myID.toString(), msg.toString());
         }
     }
 

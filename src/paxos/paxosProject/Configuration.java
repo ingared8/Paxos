@@ -16,6 +16,7 @@ public class Configuration {
 	 * 5 learners, then set this number to 1000.
 	 */
 	public static final int MAX_NODE_ID = 1000;
+	public static final int MAX_MSG_SIZE = 2000;
 
 	/* timeout in millisecond */
 	public static long pingTimeout;
@@ -27,16 +28,16 @@ public class Configuration {
 	public static int numClients;
 	public static int numLearners;
 	public static int numAcceptors;
+    public static int numProposers;
 
     public final static HashMap<Integer, NodeIdentifier> clientIDs = new HashMap<>(); //index [1,...numClients]
     public final static HashMap<Integer, NodeIdentifier> acceptorIDs = new HashMap<>();
     public final static HashMap<Integer, NodeIdentifier> learnerIDs = new HashMap<>();
+    public final static HashMap<Integer, NodeIdentifier> proposerIDs = new HashMap<>();
 
 	public static int debugLevel;
-
 	public static int testIndexA;
 	public static int testIndexB;
-
 	public static PropertiesConfiguration gpConf;
 
 	/* Logger configuration */
@@ -76,9 +77,11 @@ public class Configuration {
 		configNodeAddress(NodeIdentifier.Role.CLIENT, "client", gpConf.getInt("clientPort"));
         configNodeAddress(NodeIdentifier.Role.ACCEPTOR, "acceptor", gpConf.getInt("acceptorPort"));
         configNodeAddress(NodeIdentifier.Role.LEARNER, "learner", gpConf.getInt("learnerPort"));
+        configNodeAddress(NodeIdentifier.Role.PROPOSER,"proposer",gpConf.getInt("proposerPort"));
 		numClients = clientIDs.size();
 		numAcceptors = acceptorIDs.size();
 		numLearners = learnerIDs.size();
+        numProposers = proposerIDs.size();
 
 		pingTimeout = gpConf.getInt("pingTimeout", 200);
 		checkpointInterval = gpConf.getInt("checkpointInterval", 2000);
@@ -93,6 +96,7 @@ public class Configuration {
 	public static void showNodeConfig() {
 		System.out.format("\n== show node configuration ==\n");
 		System.out.format("%d clients %s\n", numClients, clientIDs.values());
+        System.out.format("%d proposers %s\n", numProposers, proposerIDs.values());
 		System.out.format("%d acceptors %s\n", numAcceptors, acceptorIDs.values());
 		System.out.format("%d learners %s\n\n", numLearners, learnerIDs.values());
 	}
@@ -109,7 +113,9 @@ public class Configuration {
             //        node, nodes.get(node), idx, node);
 
 			if (role == NodeIdentifier.Role.CLIENT) {
-				clientIDs.put(idx, node);
+                clientIDs.put(idx, node);
+            }else if (role == NodeIdentifier.Role.PROPOSER){
+                proposerIDs.put(idx,node);
 			} else if (role == NodeIdentifier.Role.ACCEPTOR) {
 				acceptorIDs.put(idx, node);
 			} else {

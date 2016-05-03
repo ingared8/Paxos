@@ -12,7 +12,7 @@ public interface EventHandler {
 	 * Handle a timer event. A timer event is triggered if
 	 * there is no other event in a given amount of time (100ms).
 	 */
-	public void handleTimer();
+	public void handleTimer() throws InterruptedException;
 	
 	/*
 	 * Handle a failure event. A failure event is triggered

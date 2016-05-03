@@ -4,22 +4,33 @@ import paxosProject.Configuration;
 import paxosProject.network.messages.*;
 
 import java.nio.channels.ClosedChannelException;
-import java.util.Iterator;
 
 public class Acceptor implements EventHandler {
+
+    public enum STATUS{
+        NONLEADER,LEADER
+    }
 
     private NodeIdentifier myID;
     private Network network;
     private int maxProposalID;
     private int proposalID;
     private int quorum;
+    private int leader;
+    private int numOfAcceptors;
+
+    public Network getNetwork(){
+        return  this.network;
+    }
 
     public Acceptor(NodeIdentifier node) {
         this.myID = node;
         this.network = new NettyNetwork(myID, this);
         this.maxProposalID = 0;
-        this.proposalID = 0;
+        this.proposalID = node.getID();
         this.quorum = 0;
+        this.leader = STATUS.NONLEADER.ordinal();
+        numOfAcceptors = Configuration.numAcceptors;
     }
 
     public void sendPromise(NodeIdentifier receiver, int proposalId) {
@@ -38,36 +49,18 @@ public class Acceptor implements EventHandler {
         Proposer needs to send prepare message to every one
          */
 
-    public void sendPrepare(NodeIdentifier receiver, Prepare prepareMsg){
-        this.network.sendMessage(receiver,prepareMsg);
-    }
 
-    public void sendAccept(NodeIdentifier receiver,Accept acceptMsg) {
-        this.network.sendMessage(receiver, acceptMsg);
-    }
-
-    private void sendAcceptMsg(int proposalID) {
-
-        Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
-        NodeIdentifier receiver;
-        Accept accept;
-        while ( iter.hasNext()){
-            receiver = (NodeIdentifier)iter.next();
-            accept = new Accept(myID,proposalID);
-            sendAccept(receiver, accept);
-        }
-        proposalID += 1;
-    }
 
 
     @Override
     public void handleMessage(Message msg) {
 
+
         if (msg instanceof Prepare) {
-            // TODO Check proposal Id of the message
+
             Prepare prepareMsg = (Prepare)msg;
             int proposalId = prepareMsg.getProposalID();
-            System.out.printf("Acceptor: Proposal:%s Received from : %s\n", proposalId, msg.getSender().toString());
+            System.out.printf("%s : %s Received from : %s\n", myID.toString(), proposalId, msg.getSender().toString());
             Promise promise;
             if (proposalId < maxProposalID){
                 // Reject
@@ -75,53 +68,34 @@ public class Acceptor implements EventHandler {
             } else {
                 // Accept
                 promise = new Promise(myID,Promise.STATUS.ACCEPT, proposalId);
+                maxProposalID = proposalId;
             }
 
             System.out.println(myID.toString() + " : " + promise.toString());
             network.sendMessage(prepareMsg.getSender(), promise);
 
-        } else {
-            System.out.printf("Response Received of Unknown type:  %s\n", msg.toString());
-        }
-
-        if ( msg instanceof Request){
-
-            Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
-            NodeIdentifier receiver;
-            Prepare prepareMsg;
-            while ( iter.hasNext()){
-                receiver = (NodeIdentifier)iter.next();
-                prepareMsg = new Prepare(myID, proposalID);
-                prepareMsg.setValue(msg.getValue());
-                sendPrepare(receiver, prepareMsg);
-            }
-            proposalID += 1;
-
-        } else if (msg instanceof Promise){
-            System.out.printf("Proposer: Received Ack( %s) from %s\n", msg.toString(),msg.getSender() );
-            Promise promise = (Promise)msg;
-            quorum += promise.getstatus();
-            System.out.println("status " + promise.getstatus());
-            System.out.println(promise.toString() + " Quorum :" + quorum + " Total votes " + Configuration.numAcceptors/2);
-            if ( quorum > (Configuration.numAcceptors)/2) {
-                // Quorum reached, send accept
-                System.out.println("Quorum reached ");
-                sendAcceptMsg(promise.getProposalID());
+        } else if (msg instanceof Accept) {
+            Accept accept= (Accept)msg;
+            int proposalId = accept.getProposalID();
+            System.out.printf("%s : %s Received from : %s\n", myID.toString(),msg.toString(), msg.getSender().toString());
+            Accepted accepted;
+            if (proposalId < maxProposalID){
+                // Reject
+                accepted = new Accepted(myID,accept, Accepted.STATUS.REJECTED);
             } else {
-                // Quorum not reached.
-                System.out.println("Quorum not reached");
-                int zz = 0;
+                // Accept
+                accepted = new Accepted(myID, accept, Accepted.STATUS.ACCEPTED);
+                maxProposalID = proposalId;
             }
-        } else if (msg instanceof Accepted) {
-            System.out.println(" Accepted stage reached");
+
+            System.out.println(myID.toString() + " Sending Accepted  : " + accepted.toString() );
+            network.sendMessage(accept.getSender(), accepted);
+
         } else {
-            System.out.printf("Unknown msg type received : " + msg.toString() + "\n");
-            System.out.printf(msg.getSender().toString() + " " + msg.getValue() );
-            //throw new RuntimeException("Unknown msg type received : " + msg.toString() );
+            System.out.println(myID.toString() + ": Unknown message type " + msg.toString());
         }
-
-
     }
+
 
     /*
      * Handle a timer event. A timer event is triggered if

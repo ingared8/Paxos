@@ -7,7 +7,7 @@ public class Message {
 
     // please feel free to add new types of messages
     public enum MSG_TYPE {
-	    PREPARE,PROMISE,ACCEPT,ACCEPTED,REQUEST,RESPOSNE
+	    PREPARE,PROMISE,ACCEPT,ACCEPTED,REQUEST,RESPOSNE,HEARTBEAT,LEARN,HEARTBEATREPLY,LEADERSHIP
     }
 
 	private int type;
@@ -45,6 +45,10 @@ public class Message {
 		sender = new NodeIdentifier(hashCode);
 	}
 
+	public void setSender(NodeIdentifier node){
+		sender = node;
+	}
+
 	public NodeIdentifier.Role getSenderRole(){
 		return sender.getRole();
 	}
@@ -70,7 +74,7 @@ public class Message {
 		buf.resetReaderIndex();
         //System.out.println("call deserializeRaw with type: " + MSG_TYPE.values()[type] + "\n");
 		switch(MSG_TYPE.values()[type]){
-			case PREPARE:
+            case PREPARE:
 				ret = new Prepare();
 				break;
 			case PROMISE:
@@ -85,8 +89,23 @@ public class Message {
 			case REQUEST:
 				ret = new Request();
 				break;
+            case RESPOSNE:
+                ret = new Response();
+                break;
+            case LEARN:
+                ret = new Learn();
+                break;
+            case HEARTBEAT:
+                ret = new HeartBeat();
+                break;
+            case HEARTBEATREPLY:
+                ret = new HeartBeatReply();
+                break;
+            case LEADERSHIP:
+                ret = new Leadership();
+                break;
 			default:
-				throw new RuntimeException("Unknown msg type "+type);
+				throw new RuntimeException("Unknown msg type "+type );
 		}
 		ret.deserialize(buf);
 		return ret;

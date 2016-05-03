@@ -7,7 +7,7 @@ package paxosProject.network;
  */
 public class NodeIdentifier {
 	public enum Role {
-		DUMMY, CLIENT, ACCEPTOR, LEARNER,PROPOSER
+		CLIENT, ACCEPTOR, LEARNER,PROPOSER
 	}
 	
 	private int hashCode;
