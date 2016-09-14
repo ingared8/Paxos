@@ -16,6 +16,8 @@ public class Request extends  Message implements Delayed {
     private long startTime;
     protected Request(){}
 
+    private static int delay =  400;
+
     /*
     Any request is constructe
     d from the client and  desired value it requests
@@ -27,7 +29,7 @@ public class Request extends  Message implements Delayed {
         this.id = id;
         this.key = key;
         this.value = value;
-        this.startTime = System.currentTimeMillis();
+        this.startTime = System.currentTimeMillis() + 400;
     }
 
     public int getId(){
@@ -37,7 +39,6 @@ public class Request extends  Message implements Delayed {
     public int getKey(){
         return key;
     }
-
 
     public int getValue(){
         return value;

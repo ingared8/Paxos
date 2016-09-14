@@ -6,7 +6,7 @@ import paxosProject.network.messages.Message;
 import paxosProject.network.messages.Response;
 
 import java.nio.channels.ClosedChannelException;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -23,8 +23,16 @@ public class Learner implements EventHandler {
     public Learner(NodeIdentifier node){
         this.myID = node;
         this.network = new NettyNetwork(myID, this);
-        learnedValues = new LinkedList<>();
+        learnedValues = new ArrayList<>();
         index = -1;
+    }
+
+    public synchronized void replyToClient(Message msg){
+        Learn learn = (Learn)msg;
+        System.out.println(myID.toString() + ": Sending response to  Client " + Math.max(1,learn.getRequestID()%Configuration.numClients));
+        Response response = new Response(myID,learn);
+        learnedValues.add(learn);
+        network.sendMessage(Configuration.clientIDs.get(Math.max(1,(learn.getRequestID()%Configuration.numClients))),response);
     }
 
     /*
@@ -36,11 +44,7 @@ public class Learner implements EventHandler {
     public void handleMessage(Message msg){
 
         if (msg instanceof Learn) {
-            Learn learn = (Learn)msg;
-            Response response = new Response(myID,learn);
-            learnedValues.add(learn.getSlot(),learn);
-            network.sendMessage(Configuration.clientIDs.get(Math.max(1,(learn.getRequestID()%Configuration.numClients))),response);
-
+            replyToClient(msg);
         } else if (msg instanceof Response) {
             System.out.printf("%s: Response Received from : %s => %d\n", myID.toString(), msg.getSender().toString(), msg.getValue());
         } else {

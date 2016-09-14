@@ -20,7 +20,6 @@ public class Leadership extends  Message {
     }
 
 
-
     @Override
     public void serialize(ByteBuf buf){
         super.serialize(buf);

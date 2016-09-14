@@ -65,22 +65,44 @@ public class Test {
         }
 
         Client client = clientMap.get(1);
-        //Thread.sleep(200);
-        //proposerMap.get(1).setLeaderNode();
 
-        //proposerMap.get(1).setLeaderNode();
+        for (int i=10; i < 20; i++){
+            client.sendRequest(i,i+10,Configuration.proposerIDs.get(1));
+        }
+
+
+        Thread.sleep(1000);
+        proposerMap.get(1).setLeaderNode();
+
+        Thread.sleep(10000);
+        for (int i=20; i < 30; i++){
+            client.sendRequest(i,i+1,Configuration.proposerIDs.get(2));
+        }
+
+        Thread.sleep(1000);
+        proposerMap.get(2).setLeaderNode();
+
+        Thread.sleep(10000);
+        for (int i=30; i < 40; i++){
+            client.sendRequest(i,i+1);
+        }
+
+        proposerMap.get(3).setLeaderNode();
 
         //proposerMap.get(1).setLeaderNode();
 
         /*
         Simple Test
          */
+
         //client.sendRequest(10,20,Configuration.proposerIDs.get(1));
+        //Thread.sleep(1000);
+        //proposerMap.get(1).setLeaderNode();
 
 		/*
 		To Test whether a non Leader can act can entertain any clients requests
 		 */
 		//client.sendRequest(30,40,Configuration.proposerIDs.get(2));
-	}
 
+	}
 }

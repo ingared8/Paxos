@@ -4,21 +4,17 @@ import paxosProject.Configuration;
 import paxosProject.network.messages.*;
 
 import java.nio.channels.ClosedChannelException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 public class Proposer implements EventHandler {
 
     /*
     The functions of Proposer are
-
         a) Receive values from Clients
         b) Propose/Prepare the client value to other nodes ( Acceptors).
         c) Receive their Promises/Rejections
         d) If Majority of them promise send Accept
         e) Receive Accepted from the Acceptors.
-
      */
 
     private NodeIdentifier myID;
@@ -30,17 +26,32 @@ public class Proposer implements EventHandler {
     private int slot;
     private int heartbeatCount = 0;
     private int waitCount = 0;
-    private boolean ping_option = true;
+    private  boolean ping_option = true;
+    private int lock=1;
 
     // Variables to store the intermediate state of the program
-    private Map<Integer,Integer> quorumMap = new HashMap<>();
-    private Map<Integer,Integer> promiseMap = new HashMap<>();
+    private Map<Integer,Integer> quorumMap;
+    private Map<Integer,Integer> promiseMap;
+    Set<Accepted> acceptedSet;
 
     public enum STATUS{
         NON_LEADER,LEADER
     }
 
     protected Proposer(){}
+
+    public Proposer(NodeIdentifier node){
+        this.myID = node;
+        this.network = new NettyNetwork(myID, this);
+        this.proposalID = node.getID();
+        this.leaderStatus = STATUS.NON_LEADER.ordinal();
+        numOfProposers = Configuration.numProposers;
+        quorumMap = new HashMap<>();
+        promiseMap = new HashMap<>();
+        acceptedSet = new HashSet<>();
+        setLeaderNode();
+        heartbeat();
+    }
 
     public void setLeaderNode(){
 
@@ -54,7 +65,6 @@ public class Proposer implements EventHandler {
             System.out.println(myID.toString() + " is " + STATUS.values()[leaderStatus]);
             return;
         }
-
 
         int i=leaderNode.getID();
         System.out.println(myID.toString() + " : Calling Leader function and Current LeaderId is " + i );
@@ -71,23 +81,25 @@ public class Proposer implements EventHandler {
             }
         }
 
-        if (newLeader.hashCode() == myID.hashCode()){
-            System.out.println(myID.toString() + "Gaining my Leadeship");
-            leaderStatus = STATUS.LEADER.ordinal();
-            leaderNode = newLeader;
-            broadcastLeadership();
-        } else if (myID.hashCode() == leaderNode.hashCode()){
-            System.out.println(myID.toString() + "Dropping my Leadeship");
-            leaderStatus = STATUS.NON_LEADER.ordinal();
-            ping_option = false;
-            waitCount = 0;
-        } else {
-            System.out.println(myID.toString() + "waiting for message from Leadeship");
-            leaderStatus = STATUS.NON_LEADER.ordinal();
-            ping_option = false;
-            waitCount = 0;
+         {
+            if (newLeader.hashCode() == myID.hashCode()) {
+                System.out.println(myID.toString() + "Gaining my Leadeship");
+                leaderStatus = STATUS.LEADER.ordinal();
+                leaderNode = newLeader;
+                broadcastLeadership();
+                broadcastPrepare();
+            } else if (myID.hashCode() == leaderNode.hashCode()) {
+                System.out.println(myID.toString() + "Dropping my Leadeship");
+                leaderStatus = STATUS.NON_LEADER.ordinal();
+                ping_option = false;
+                waitCount = 0;
+            } else {
+                System.out.println(myID.toString() + "waiting for message from Leadeship");
+                leaderStatus = STATUS.NON_LEADER.ordinal();
+                ping_option = false;
+                waitCount = 0;
+            }
         }
-
     }
 
     private void broadcastLeadership() {
@@ -101,20 +113,26 @@ public class Proposer implements EventHandler {
         }
     }
 
+    private void broadcastPrepare() {
+
+        System.out.println(myID.toString() + "Broadcasting my Promise");
+        Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
+        Prepare prepare = new Prepare(myID,proposalID);
+        acceptedSet = new HashSet<>();
+        promiseMap.put(proposalID,0);
+        while(iter.hasNext()){
+            NodeIdentifier receiver = (NodeIdentifier)iter.next();
+            network.sendMessage(receiver, prepare);
+        }
+        proposalID += numOfProposers;
+    }
+
     public void setLeaderNode1(NodeIdentifier node){
         leaderNode = myID;
         leaderStatus = STATUS.LEADER.ordinal();
     }
 
-    public Proposer(NodeIdentifier node){
-        this.myID = node;
-        this.network = new NettyNetwork(myID, this);
-        this.proposalID = node.getID();
-        this.leaderStatus = STATUS.NON_LEADER.ordinal();
-        numOfProposers = Configuration.numProposers;
-        setLeaderNode();
-        heartbeat();
-    }
+
 
     private void heartbeat() {
         final Thread thread = new Thread(new Runnable() {
@@ -127,9 +145,9 @@ public class Proposer implements EventHandler {
                         network.sendMessage(leaderNode, new HeartBeat(myID, heartbeatCount));
                         heartbeatCount += 1;
                         Thread.sleep(1l);
-                        if (heartbeatCount%500 == 0){
-                            System.out.println(myID.toString() + " Pinging leader " + leaderNode.toString());
-                        }
+                        //if (heartbeatCount%500 == 0){
+                        //    System.out.println(myID.toString() + " Pinging leader " + leaderNode.toString());
+                        //}
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -143,28 +161,6 @@ public class Proposer implements EventHandler {
     }
 
     /*
-    Proposer needs to send prepare message to every one
-    */
-
-    public void leaderElection(){
-        Prepare prepare = new Prepare(myID,proposalID);
-        Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
-        NodeIdentifier receiver;
-        Accept accept;
-        while ( iter.hasNext()){
-            receiver = (NodeIdentifier)iter.next();
-            sendPrepare(receiver, prepare);
-            promiseMap.put(proposalID,0);
-        }
-        proposalID += numOfProposers;
-    }
-
-    public void sendPrepare(NodeIdentifier receiver, Prepare prepareMsg){
-        this.network.sendMessage(receiver, prepareMsg);
-    }
-
-
-    /*
      * Handle a message from another node
      */
 
@@ -176,80 +172,136 @@ public class Proposer implements EventHandler {
                 System.out.println(myID + " received " + ((Promise) msg).toString());
                 if (promise.getstatus() != Promise.STATUS.REJECT.ordinal() && (promiseMap.containsKey(promise.getProposalID()))) {
                     int value = promiseMap.get(promise.getProposalID()) + 1;
+                    addToset(acceptedSet,promise);
                     promiseMap.remove(promise.getProposalID());
                     promiseMap.put(promise.getProposalID(), value);
                     if (value >= (1 + Configuration.numAcceptors / 2)) {
                         this.proposalID += numOfProposers;
+                        mergeSetData();
+                        promiseMap.remove(promise.getProposalID());
                     }
                 }
                 if (promise.getstatus() == Promise.STATUS.REJECT.ordinal() && (promiseMap.containsKey(promise.getProposalID()))) {
                         promiseMap.remove(promise.getProposalID());
+                        acceptedSet = new HashSet<>();
                 }
 
                 if (promise.getstatus() == Promise.STATUS.REJECT.ordinal()){
                     setLeaderNode();
                 }
             } else if (msg instanceof Request){
-                Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
-                NodeIdentifier receiver;
-                Accept accept = new Accept(myID,proposalID,slot,(Request)msg);
-                slot += 1;
-                quorumMap.put(accept.getProposalID(),0);
-                while ( iter.hasNext()){
-                    receiver = (NodeIdentifier)iter.next();
-                    this.network.sendMessage(receiver, accept);
-                }
+                broadcastRequest(msg);
             } else if (msg instanceof HeartBeat) {
                 HeartBeat heartBeatMessage = (HeartBeat)msg;
                 NodeIdentifier sender = heartBeatMessage.getSender();
-                this.network.sendMessage(sender, new HeartBeatReply(sender,heartBeatMessage));
+                this.network.sendMessage(sender, new HeartBeatReply(myID,heartBeatMessage));
                 heartbeatCount += 1;
-                if (heartbeatCount%1000 == 0){
-                    System.out.println(myID.toString() + " replying to ping from " + sender.toString() + " for HeartBeat " + heartBeatMessage.getCount());
-                }
+                //if (heartbeatCount%1000 == 0){
+                //    System.out.println(myID.toString() + " replying to ping from " + sender.toString() + " for HeartBeat " + heartBeatMessage.getCount());
+                //}
             } else if (msg instanceof Accepted) {
                 Accepted accepted = (Accepted)msg;
-                System.out.println(myID.toString() + " received " + accepted.toString());
-                if (accepted.getStatus() == Accepted.STATUS.ACCEPTED.ordinal() && (quorumMap.containsKey(accepted.getProposalID()))) {
+                System.out.println(myID.toString() + " received " + accepted.toString() + " for Request " + accepted.getRequestID());
+                if (accepted.getStatus() == Accepted.STATUS.ACCEPTED.ordinal() && (quorumMap.containsKey(accepted.getRequestID()))) {
                     System.out.println("PromiseMap " + promiseMap.toString());
-                    int value = quorumMap.get(accepted.getProposalID()) + 1;
-                    quorumMap.remove(accepted.getProposalID());
-                    quorumMap.put(accepted.getProposalID(), value);
+                    int value = quorumMap.get(accepted.getRequestID()) + 1;
+                    quorumMap.remove(accepted.getRequestID());
+                    quorumMap.put(accepted.getRequestID(), value);
                     if (value >= (1 + Configuration.numAcceptors/2)) {
                         System.out.println(myID.toString()+ " Sending Learn to learners for " + accepted.toString());
-                        quorumMap.remove(accepted.getProposalID());
+                        quorumMap.remove(accepted.getRequestID());
                         this.sendLearn(accepted);
                     }
                 }
-                if (accepted.getStatus() == Accepted.STATUS.REJECTED.ordinal() && (quorumMap.containsKey(accepted.getProposalID()))) {
-                    quorumMap.remove(accepted.getProposalID());
+                if (accepted.getStatus() == Accepted.STATUS.REJECTED.ordinal() && (quorumMap.containsKey(accepted.getRequestID()))) {
+                    quorumMap.remove(accepted.getRequestID());
                 }
             } else {
                 System.out.printf("Unknown msg type received : " + msg.toString() + "\n");
                 //throw new RuntimeException("Unknown msg type received : " + msg.toString() );
             }
         } else {
-
             if (msg instanceof Request){
                 Request request = (Request)msg;
                 NodeIdentifier sender = request.getSender();
                 request.setSender(leaderNode);
                 this.network.sendMessage(sender,request);
             } else if (msg instanceof HeartBeatReply) {
-                if (((HeartBeatReply) msg).getCount()%500 == 0){
-                    System.out.println(myID.toString() + " recieved a reply for a ping from " + msg.getSender().toString() + " for hearbeat: " + ((HeartBeatReply) msg).getCount());
-                    waitCount = 0;
-                }
+                HeartBeatReply reply = (HeartBeatReply)msg;
+                waitCount = 0;
+                //if (((HeartBeatReply) msg).getCount()%500 == 0){
+                //    System.out.println(myID.toString() + " recieved a reply for a ping from " + reply.getSender().toString() + " for hearbeat: " + ((HeartBeatReply) msg).getCount());
+                //    waitCount = 0;
+                //}
             } else if (msg instanceof HeartBeat) {
                 waitCount = -100;
             } else if (msg instanceof Leadership){
                 leaderStatus = STATUS.NON_LEADER.ordinal();
                 leaderNode = msg.getSender();
                 this.waitCount = 0;
+                ping_option = true;
                 System.out.printf(myID.toString() + "Leadership message received : " + msg.toString() + "\n");
+                heartbeat();
             } else {
                 System.out.printf(myID.toString() + "Unknown msg type received : " + msg.toString() + "\n");
             }
+        }
+    }
+
+    private void broadcastRequest(Message msg) {
+        Iterator<NodeIdentifier> iter = Configuration.acceptorIDs.values().iterator();
+        NodeIdentifier receiver;
+        Accept accept = new Accept(myID,proposalID,slot,(Request) msg);
+        slot += 1;
+        quorumMap.put(accept.getRequestID(),0);
+        while ( iter.hasNext()){
+            receiver = (NodeIdentifier)iter.next();
+            this.network.sendMessage(receiver, accept);
+        }
+    }
+
+    private synchronized  void updateMap(Map<Integer,Integer> map, int key, int value ){
+        map.put(key,value);
+    }
+
+    private synchronized int[] getMaxProposalIdAndMaxSlotId(Set<Accepted> acceptedSet){
+        Iterator<Accepted> iter = acceptedSet.iterator();
+        int slotMax = 0;
+        int propMax = 0;
+        while (iter.hasNext()){
+            Accepted accepted = (Accepted)iter.next();
+            slotMax = (accepted.getSlot() > slotMax ? accepted.getSlot():slotMax );
+            propMax = (accepted.getProposalID() > propMax ? accepted.getProposalID():propMax );
+        }
+
+        int proposlId = myID.getID();
+        System.out.println(myID.toString() + " : PropMax " + propMax + " Slot Max is " + slotMax);
+        while (propMax >= proposlId){
+            proposlId += numOfProposers;
+        }
+        slotMax += 1;
+        return (new int[] {slotMax, proposlId});
+    }
+
+    private synchronized void mergeSetData() {
+        Queue<Accepted> acceptedQueue = new PriorityQueue<>(1000,Functions.getAcceptedComparator());
+        Iterator<Accepted> iter =acceptedSet.iterator();
+        while (iter.hasNext()){
+            Accepted accepted = (Accepted)iter.next();
+            acceptedQueue.add(accepted);
+        }
+
+        int[] res = getMaxProposalIdAndMaxSlotId(acceptedSet);
+        System.out.println(myID.toString() + " Slot is " + res[0] + " proposalId " + res[1]);
+        slot = res[0];
+        proposalID = res[1];
+    }
+
+    private synchronized void addToset(Set<Accepted> acceptSet, Promise promise) {
+
+        Iterator<Accepted> iter = promise.getAcceptedList().iterator();
+        while (iter.hasNext()){
+            acceptedSet.add((Accepted)iter.next());
         }
     }
 
@@ -275,7 +327,7 @@ public class Proposer implements EventHandler {
         // Check for whether is active
         if (leaderStatus == STATUS.NON_LEADER.ordinal() && ping_option) {
             waitCount += 1;
-            if (leaderStatus != STATUS.LEADER.ordinal() && waitCount >= 100) {
+            if (leaderStatus != STATUS.LEADER.ordinal() && waitCount >= 40) {
                 System.out.println(myID.toString() + " WaitCount" + waitCount + ": Not received a ping from leader");
                 setLeaderNode();
                 waitCount = 0;
